@@ -1,0 +1,28 @@
+---
+
+openfire__ferm__dependent_rules:
+
+  - type: 'accept'
+    dport:
+      - '7777'
+      - '5229'
+      - '5269'
+      - '9090'
+      - '9091'
+      - '5222'
+      - '5223'
+      - '7070'
+      - '7443'
+    protocol: [ 'tcp' ]
+    role: 'le9i0nx.openfire'
+    name: 'tcp'
+    accept_any: True
+
+  - type: 'accept'
+    dport: [ '58612' ]
+    protocol: [ 'udp' ]
+    role: 'le9i0nx.openfire'
+    name: 'udp'
+    accept_any: True
+
+## vim: foldmethod=marker:tabstop=2:shiftwidth=2:softtabstop=2
