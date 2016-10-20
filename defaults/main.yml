@@ -1,0 +1,56 @@
+---
+openfire__sql_user_name: 'openfire'
+openfire__sql_db_name: 'openfire'
+openfire__sql_user_password: '{{ lookup("password",
+                  secret + "/mariadb/" + mariadb__delegate_to +
+                  "/credentials/" + openfire__sql_user_name + "/password " +
+                  "length=" + mariadb__password_length) }}'
+
+openfire__ferm__dependent_rules:
+
+  - type: 'accept'
+    dport:
+      - '7777'
+      - '5229'
+      - '5269'
+      - '9090'
+      - '9091'
+      - '5222'
+      - '5223'
+      - '7070'
+      - '7443'
+    protocol: [ 'tcp' ]
+    role: 'le9i0nx.openfire'
+    name: 'tcp'
+    accept_any: True
+
+  - type: 'accept'
+    dport: [ '58612' ]
+    protocol: [ 'udp' ]
+    role: 'le9i0nx.openfire'
+    name: 'udp'
+    accept_any: True
+
+openfire__mariadb__dependent_databases:
+
+  - name: '{{ openfire__sql_db_name }}'
+
+openfire__mariadb__dependent_users:
+
+  - name: '{{ openfire__sql_user_name }}'
+    database: '{{ openfire__sql_db_name }}'
+    password: '{{ openfire__sql_user_password }}'
+    priv_aux: False
+
+# apt-key adv --list-public-keys --with-fingerprint --with-colons
+openfire__repositories_key:
+
+  - keyserver: "keyserver.ubuntu.com"
+    id: "7B2C3B0889BF5709A105D03AC2518248EEA14886"
+
+
+openfire__repositories:
+
+  - repo: 'deb http://ppa.launchpad.net/webupd8team/java/ubuntu xenial main'
+
+## vim: foldmethod=marker:tabstop=2:shiftwidth=2:softtabstop=2

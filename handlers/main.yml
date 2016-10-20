@@ -1,0 +1,6 @@
+---
+
+- name: openfire restart
+  service:
+    name:  openfire
+    state: restarted

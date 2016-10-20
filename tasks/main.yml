@@ -1,0 +1,15 @@
+---
+
+- name: install
+  include: install.yml
+  when: role_openfire_register_install is not defined
+
+- name: install register
+  set_fact:
+    role_syncthing_register_install: ""
+  when: role_openfire_register_install is not defined
+
+- name: config
+  include: config.yml
+
+## vim: foldmethod=marker:tabstop=2:shiftwidth=2:softtabstop=2

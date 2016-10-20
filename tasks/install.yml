@@ -1,0 +1,29 @@
+---
+
+#echo debconf shared/accepted-oracle-license-v1-1 select true | debconf-set-selections
+#echo debconf shared/accepted-oracle-license-v1-1 seen true |  debconf-set-selections
+- name: Accept oracle license
+  debconf:
+    name: 'oracle-java7-installer'
+    question: 'shared/accepted-oracle-license-v1-1'
+    value: 'true'
+    vtype: 'select'
+
+- name: install required packages
+  apt:
+    name: '{{ item }}'
+    state: 'present'
+    install_recommends: False
+  with_flattened:
+    - 'oracle-java7-installer'
+
+- name: download openfire deb
+  get_url:
+    url: 'http://www.igniterealtime.org/builds/openfire/openfire_3.10.3_all.deb'
+    dest: '/root/openfire_3.10.3_all.deb'
+
+- name: install packages
+  apt:
+    deb: '/root/openfire_3.10.3_all.deb'
+
+## vim: foldmethod=marker:tabstop=2:shiftwidth=2:softtabstop=2
