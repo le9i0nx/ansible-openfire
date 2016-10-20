@@ -1,0 +1,12 @@
+---
+
+- name: Configure openfire.conf
+  template:
+    src: "etc/openfire/openfire.xml.j2"
+    dest: '/etc/openfire/openfire.xml'
+    owner: 'openfire'
+    group: 'openfire'
+    mode: '0644'
+  notify: [ 'openfire restart' ]
+
+## vim: foldmethod=marker:tabstop=2:shiftwidth=2:softtabstop=2
