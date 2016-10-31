@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+
+import os
+import ldap3
+import MySQLdb
+import re
+
+bind_dn = "dc=rugion,dc=ru"
+main_dn = "ou=users,ou=arkhangelsk," + bind_dn
+ext_user = [
+    'root',
+    'scan',
+    'installuser',
+    'share_access',
+    'online',
+    'admin',
+    'backup',
+    'guest',
+    'jabberbot',
+    'simple',
+    'regions_report',
+    ]
+exl_groups = [
+    'builtin_admins',
+    'builtin_users',
+    'crypto_users',
+    'nt_admins',
+    'nt_computers',
+    'nt_guests',
+    'nt_helpdesk',
+    'nt_monitoring',
+    'nt_wifi',
+    'nt_users',
+    'nt_park',
+    'nt_rodnik',
+    'service_folder_users',
+    'nt_1c',
+    'nt_producterrors',
+    'nt_top',
+    'nt_teachers',
+    'nt_zarplata_ru',
+    ]
+siti_list = {
+    "74RU":         { "ldap":'ou=chelyabinsk,dc=rugion,dc=ru',  "jid_domain":"info74.ru",   "prefix":"74.RU"},
+    "ROSTOV":       { "ldap":'ou=rostov,dc=rugion,dc=ru',       "jid_domain":"corp.161.ru", "prefix":"161.RU"},
+    "UFA":          { "ldap":'ou=ufa,dc=rugion,dc=ru',          "jid_domain":"corp.ufa1.ru","prefix":"UFA1.RU"},
+    "PERM":         { "ldap":'ou=perm,dc=rugion,dc=ru',         "jid_domain":"info59.ru",   "prefix":"59.RU"},
+    "SAMARA":       { "ldap":'ou=samara,dc=rugion,dc=ru',       "jid_domain":"info63.ru",   "prefix":"63.RU"},
+    "ARKHANGELSK":  { "ldap":'ou=arkhangelsk,dc=rugion,dc=ru',  "jid_domain":"corp.29.ru",  "prefix":"29.RU"},
+    "YAROSLAVL":    { "ldap":'ou=yaroslavl,dc=rugion,dc=ru',    "jid_domain":"corp.76.ru",  "prefix":"76.RU"},
+    "TUMEN":        { "ldap":'ou=tumen,dc=rugion,dc=ru',        "jid_domain":"ig72.ru",     "prefix":"72.RU"},
+    "VOLGOGRAD":    { "ldap":'ou=volgograd,dc=rugion,dc=ru',    "jid_domain":"corp.v1.ru",  "prefix":"V1.RU"},
+}
+sql_user = '{{ openfire__sql_user_name }}'
+sql_db = '{{ openfire__sql_db_name }}'
+sql_pass = '{{ openfire__sql_user_password }}'
+sql_host = '{{ openfire__sql_host }}'
+ldap_host = '{{ openfire__ldap_host }}'
+
+
+con = MySQLdb.connect( host=sql_host, user=sql_user, passwd=sql_pass, db=sql_db, charset='utf8',use_unicode=True );
+cur = con.cursor()
+
+# 1. Обходим ldap города по ou=users по полю uid 
+# Фильтр (&(cn={0})(objectClass=posixAccount)(objectClass=inetOrgPerson)(!(sambaAcctFlags=[DU ])))
+server_ldap = ldap3.Server( ldap_host, port = 389, get_info = ldap3.GET_ALL_INFO)
+connect_ldap = ldap3.Connection(server_ldap, auto_bind = True, client_strategy = ldap3.STRATEGY_SYNC, authentication=ldap3.ANONYMOUS, check_names=True)
+connect_ldap.search(
+    main_dn,
+    '(&(cn=*)(objectClass=posixAccount)(objectClass=inetOrgPerson)(!(sambaAcctFlags=[DU ])))',
+    ldap3.SEARCH_SCOPE_WHOLE_SUBTREE,
+    attributes = [
+                'uid',
+                'cn',
+                ])
+uid_users = []
+for raw_ldap in connect_ldap.response:
+    uid_users.append(raw_ldap['attributes'].get('uid',[''])[0])
+
+for uid_user in uid_users:
+    if not uid_user in ext_user:
+        # 2. для каждого пользователя обходим ldap по всем городам
+        for key, value in siti_list.items():
+            ldap_dn = value['ldap']
+            group_prefix = value['prefix']
+            jid_domain = value['jid_domain']
+            connect_ldap.search(
+                ldap_dn,
+                '(&(cn=*)(objectClass=posixAccount)(objectClass=inetOrgPerson)(!(sambaAcctFlags=[DU ])))',
+                ldap3.SEARCH_SCOPE_WHOLE_SUBTREE,
+                attributes = [
+                    'uid',
+                    'cn',
+                    'displayName',
+                    'givenName',
+                    'sn',
+                ])
+            for raw_ldap_user in connect_ldap.response:
+                uid_user_user = raw_ldap_user['attributes'].get('uid',[''])[0]
+                uid_sn = re.sub("^\s+|\n|\r|\s+$", '',  raw_ldap_user['attributes'].get('sn',[''])[0])
+                uid_givenName = re.sub("^\s+|\n|\r|\s+$", '', raw_ldap_user['attributes'].get('givenName',[''])[0] )
+
+                if not uid_user_user in ext_user:
+                    jid_user =uid_user_user + "@" + jid_domain
+                    nick = "{} {}".format(uid_sn,uid_givenName)
+                    connect_ldap.search(
+                        ldap_dn,
+                        '(&(cn=*)(objectClass=posixGroup)(memberUid={}))'.format(uid_user_user),
+                        ldap3.SEARCH_SCOPE_WHOLE_SUBTREE,
+                        attributes = [
+                        'cn',
+                        'description',
+                        ])
+                    ldap_group_name = ""
+                    for raw_ldap_user_group in connect_ldap.response:
+                        ldap_group_cn = raw_ldap_user_group['attributes'].get('cn',[''])[0]
+                        if not ldap_group_cn in exl_groups:
+                            ldap_group_name = raw_ldap_user_group['attributes'].get('description',[''])[0]
+                    groupName_new = "-- {}: {} --".format(group_prefix,ldap_group_name)
+
+                    # 3. и проверяем есть ли запись в mysql
+                    # select rosterID, nick from ofRoster where username='".$usernames[$u]."' and jid='$jid'" ;
+                    sql_raw = "select rosterID, nick from ofRoster where username='{}' and jid='{}'".format(uid_user,jid_user)
+                    cur.execute(sql_raw)
+                    rows_ofRoster = cur.fetchall()
+                    for row_ofRoster in rows_ofRoster:
+                        rosterID = row_ofRoster[0]
+                        if nick != row_ofRoster[1]:
+                            # 4. если есть обновляем запись
+                            # update ofRoster set nick='$displayname' where rosterID=".$row[0];
+                            sql_raw = "update ofRoster set nick='{}' where rosterID='{}'".format(nick,rosterID)
+                            print(sql_raw )
+                            cur.execute(sql_raw)
+                        # select groupName from ofRosterGroups where rosterID='".$row[0]."' limit 1";
+                        sql_raw = "select groupName from ofRosterGroups where rosterID='{}'".format(rosterID)
+                        cur.execute(sql_raw)
+                        rows_ofRosterGroups = cur.fetchall()
+                        for row_ofRosterGroups in rows_ofRosterGroups:
+                            groupName = row_ofRosterGroups[0]
+                            if groupName_new != groupName:
+                                sql_raw = "update ofRosterGroups set groupName='{}' where rosterID='{}'".format(groupName_new,rosterID)
+                                print(sql_raw)
+                                cur.execute(sql_raw)
+                    # 5. если нет создаём новую зарание прочитав последний rosterID
+                    if rows_ofRoster == ():
+                        # "select rosterID from ofRoster ORDER BY rosterID desc limit 1;" ;
+                        sql_raw = "select rosterID from ofRoster ORDER BY rosterID desc limit 1"
+                        cur.execute(sql_raw)
+                        rows_rosterID = cur.fetchall()[0][0]+1
+                        # insert into ofRoster (rosterID , username , jid , sub , ask , recv , nick ) values ($rosterID, '".$usernames[$u]."', '$jid', 3, -1, -1, '$displayname');" ;
+                        sql_raw = "insert into ofRoster (rosterID , username , jid , sub , ask , recv , nick ) values ({}, '{}', '{}', 3, -1, -1, '{}')".format(rows_rosterID,uid_user,jid_user,nick)
+                        print(sql_raw)
+                        cur.execute(sql_raw)
+                        # insert into ofRosterGroups ( rosterID , rank , groupName ) values ($rosterID, 0, '$groupname');"
+                        sql_raw = "insert into ofRosterGroups ( rosterID , rank , groupName ) values ({}, 0, '{}')".format(rows_rosterID,groupName_new)
+                        print(sql_raw)
+                        cur.execute(sql_raw)
+
+# 6. чистка ростера бежим по таблице в базе (ofRoster) по полю username
+# SELECT DISTINCT username FROM ofRoster;
+sql_raw = "SELECT DISTINCT username FROM ofRoster"
+cur.execute(sql_raw)
+rows_users = cur.fetchall()
+for row_users in rows_users:
+    user_del = row_users[0]
+    if not user_del in uid_users:
+        print("del " + user_del)
+        sql_raw = "select rosterID from ofRoster where username='{}'".format(user_del)
+        cur.execute(sql_raw)
+        rows_del = cur.fetchall()
+        for row_del in rows_del:
+            rosterID = row_del[0]
+            # если пользователя нет в ldap то удаляем все записи с его участием
+            sql_raw = "DELETE FROM ofRoster where rosterID={}".format(rosterID)
+            print(sql_raw)
+            cur.execute(sql_raw)
+            sql_raw = "DELETE FROM ofRosterGroups where rosterID={}".format(rosterID)
+            print(sql_raw)
+            cur.execute(sql_raw)
+#       SELECT DISTINCT jid FROM ofRoster;
+sql_raw = "SELECT DISTINCT jid FROM ofRoster"
+cur.execute(sql_raw)
+rows_jid = cur.fetchall()
+for key, value in siti_list.items():
+    jid_domain = value['jid_domain']
+    ldap_dn = value['ldap']
+    connect_ldap.search(
+        ldap_dn,
+        '(&(cn=*)(objectClass=posixAccount)(objectClass=inetOrgPerson)(!(sambaAcctFlags=[DU ])))',
+        ldap3.SEARCH_SCOPE_WHOLE_SUBTREE,
+        attributes = [
+            'uid',
+            'cn',
+            'displayName',
+            'givenName',
+            'sn',
+            ])
+    uid_ldap_users = []
+    for raw_ldap in connect_ldap.response:
+            uid_ldap_users.append(raw_ldap['attributes'].get('uid',[''])[0])
+
+    for row_jid in rows_jid:
+        jid = row_jid[0]
+        # если jid из наших доменов то ищем в ldap пользователя
+        if jid_domain in jid:
+            jid_local = jid.split("@")[0]
+            # если его нету удаляем все записи с его участием
+            if not jid_local in uid_ldap_users:
+                sql_raw = "select rosterID from ofRoster where jid='{}'".format(jid)
+                cur.execute(sql_raw)
+                rows_del = cur.fetchall()
+                for row_del in rows_del:
+                    print("no jid to ldap {}".format(jid))
+                    rosterID = row_del[0]
+                    # если пользователя нет в ldap то удаляем все записи с его участием
+                    sql_raw = "DELETE FROM ofRoster where rosterID={}".format(rosterID)
+                    print(sql_raw)
+                    cur.execute(sql_raw)
+                    sql_raw = "DELETE FROM ofRosterGroups where rosterID={}".format(rosterID)
+                    print(sql_raw)
+                    cur.execute(sql_raw)
+
+
+
+
+#   7. чистим группы ростера в таблице ofRosterGroups
+#       бежим по таблице ofRosterGroups и ищем rosterID в таблице ofRoster
+#           если его нет удаляем запись
+
+sql_raw = "select rosterID from ofRosterGroups"
+cur.execute(sql_raw)
+rows_group = cur.fetchall()
+for row_group in rows_group:
+    sql_raw = "select rosterID from ofRoster where rosterID={}".format(row_group[0])
+    cur.execute(sql_raw)
+    rows_rosterID = cur.fetchall()
+    if rows_rosterID == ():
+        print("no ofRoster")
+        rosterID = row_group[0]
+        sql_raw = "DELETE FROM ofRosterGroups where rosterID={}".format(rosterID)
+        print(sql_raw)
+        cur.execute(sql_raw)
+

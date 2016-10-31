@@ -9,4 +9,12 @@
     mode: '0644'
   notify: [ 'openfire restart' ]
 
+- name: copy cron.hourly openfire_add_to_roster
+  template:
+    src: "etc/cron.hourly/openfire_add_to_roster.j2"
+    dest: '/etc/cron.hourly/openfire_add_to_roster'
+    owner: 'root'
+    group: 'root'
+    mode: '0711'
+
 ## vim: foldmethod=marker:tabstop=2:shiftwidth=2:softtabstop=2

@@ -16,6 +16,8 @@
     install_recommends: False
   with_flattened:
     - 'oracle-java7-installer'
+    - 'python3-ldap3'
+    - 'python3-mysqldb'
 
 - name: download openfire deb
   get_url:

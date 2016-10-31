@@ -12,7 +12,7 @@
   <database> 
     <defaultProvider> 
       <driver>com.mysql.jdbc.Driver</driver>  
-      <serverURL>jdbc:mysql://127.0.0.1:3306/{{ openfire__sql_db_name }}?useUnicode=true&amp;characterEncoding=UTF-8&amp;characterSetResults=UTF-8</serverURL>  
+      <serverURL>jdbc:mysql://{{ openfire__sql_host }}:3306/{{ openfire__sql_db_name }}?useUnicode=true&amp;characterEncoding=UTF-8&amp;characterSetResults=UTF-8</serverURL>  
       <username>{{ openfire__sql_user_name }}</username>  
       <password>{{ openfire__sql_user_password }}</password>  
       <testSQL>select 1</testSQL>  
