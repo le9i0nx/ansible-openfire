@@ -1,6 +1,8 @@
 ---
 openfire__sql_host: 'localhost'
 openfire__ldap_host: 'localhost'
+openfire__ldap_bind_dn: 'dc=explams,dc=local'
+openfire__ldap_main_dn: 'cn=city'
 openfire__sql_user_name: 'openfire'
 openfire__sql_db_name: 'openfire'
 openfire__sql_user_password: '{{ lookup("password",

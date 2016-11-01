@@ -5,8 +5,8 @@ import ldap3
 import MySQLdb
 import re
 
-bind_dn = "dc=rugion,dc=ru"
-main_dn = "ou=users,ou=arkhangelsk," + bind_dn
+bind_dn = "{{ openfire__ldap_bind_dn }}"
+main_dn = "{{ openfire__ldap_main_dn }}," + bind_dn
 ext_user = [
     'root',
     'scan',
@@ -19,6 +19,7 @@ ext_user = [
     'jabberbot',
     'simple',
     'regions_report',
+    'nobody',
     ]
 exl_groups = [
     'builtin_admins',
@@ -56,7 +57,6 @@ sql_db = '{{ openfire__sql_db_name }}'
 sql_pass = '{{ openfire__sql_user_password }}'
 sql_host = '{{ openfire__sql_host }}'
 ldap_host = '{{ openfire__ldap_host }}'
-
 
 con = MySQLdb.connect( host=sql_host, user=sql_user, passwd=sql_pass, db=sql_db, charset='utf8',use_unicode=True );
 cur = con.cursor()
@@ -164,12 +164,12 @@ rows_users = cur.fetchall()
 for row_users in rows_users:
     user_del = row_users[0]
     if not user_del in uid_users:
-        print("del " + user_del)
         sql_raw = "select rosterID from ofRoster where username='{}'".format(user_del)
         cur.execute(sql_raw)
         rows_del = cur.fetchall()
         for row_del in rows_del:
             rosterID = row_del[0]
+            print("del " + user_del)
             # если пользователя нет в ldap то удаляем все записи с его участием
             sql_raw = "DELETE FROM ofRoster where rosterID={}".format(rosterID)
             print(sql_raw)
@@ -219,9 +219,6 @@ for key, value in siti_list.items():
                     sql_raw = "DELETE FROM ofRosterGroups where rosterID={}".format(rosterID)
                     print(sql_raw)
                     cur.execute(sql_raw)
-
-
-
 
 #   7. чистим группы ростера в таблице ofRosterGroups
 #       бежим по таблице ofRosterGroups и ищем rosterID в таблице ofRoster
