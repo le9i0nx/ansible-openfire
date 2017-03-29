@@ -56,5 +56,6 @@ openfire__repositories_key:
 openfire__repositories:
 
   - repo: 'deb http://ppa.launchpad.net/webupd8team/java/ubuntu xenial main'
+    mode: '0444'
 
 ## vim: foldmethod=marker:tabstop=2:shiftwidth=2:softtabstop=2
